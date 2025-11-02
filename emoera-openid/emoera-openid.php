@@ -26,6 +26,7 @@
          add_action('admin_init', array($this, 'register_settings'));
          add_action('login_form', array($this, 'add_login_button'));
          add_action('init', array($this, 'handle_oauth_callback'));
+         add_action('init', array($this, 'handle_fixed_login_entry'));
      }
      
      public function add_admin_menu() {
@@ -52,6 +53,13 @@
                  submit_button();
                  ?>
              </form>
+             <p style="margin-top:20px; font-size:14px;">
+                🔗 你也可以直接访问以下地址，使用登录功能：<br>
+                <code><?php echo esc_html( home_url('/?e-login') ); ?></code><br>
+                <a href="<?php echo esc_url( home_url('/?e-login') ); ?>" target="_blank" class="button button-secondary" style="margin-top:6px;">
+                    立即跳转登录功能
+                </a>
+             </p>
          </div>
         <?php
      }
@@ -157,6 +165,42 @@
          wp_redirect(home_url());
          exit;
      }
+     
+     public function handle_fixed_login_entry() {
+        // 固定入口：访问 https://你的站点/?e-login 即触发
+        if (!isset($_GET['e-login'])) {
+            return;
+        }
+
+        if (is_user_logged_in()) {
+            wp_die(
+                '<h2 style="font-family:sans-serif;">您已登录</h2>
+                <p>当前已登录账号：' . esc_html(wp_get_current_user()->display_name) . '</p>
+                <p><a href="' . esc_url(home_url()) . '" class="button button-primary">返回首页</a></p>',
+                '已登录',
+                array('response' => 200)
+            );
+        }        
+    
+        $client_id = get_option('emoera-openid-client-id');
+        if (empty($client_id)) {
+            wp_die('E时代通行证：未配置 Client ID，无法发起登录。');
+        }
+    
+        $state = wp_create_nonce('emoera-openid-nonce');
+        set_transient('emoera-openid-state_' . $state, 'valid', 600);
+    
+        $redirect_uri = urlencode(home_url('/?e-callback'));
+        $auth_url = 'https://account.emoera.com/oauth/authorize?client_id=' . rawurlencode($client_id)
+                  . '&response_type=code'
+                  . '&redirect_uri=' . $redirect_uri
+                  . '&state=' . rawurlencode($state)
+                  . '&scope=read';
+    
+        // 302 跳转到授权中心
+        wp_redirect($auth_url);
+        exit;
+    }    
      
      private function get_access_token($code) {
          $client_id = get_option('emoera-openid-client-id');
