@@ -259,49 +259,61 @@
      }
      
      private function login_or_create_user($user_data) {
-         $e_user_id = $user_data['id'];
-         $username = sanitize_user($user_data['username']);
-         $email = isset($user_data['email']) && is_email($user_data['email']) ? sanitize_email($user_data['email']) : '';
-     
-         $users = get_users(array(
-             'meta_key' => 'emoera-openid-user-id',
-             'meta_value' => $e_user_id,
-             'number' => 1,
-             'count_total' => false,
-         ));
-     
-         if(!empty($users)) {
-             $user = $users[0];
-         } else {
-             if (!empty($email) && email_exists($email)) {
-                 $user = get_user_by('email', $email);
-                 update_user_meta($user -> ID, 'emoera-openid-user-id', $e_user_id);
-             } else {
-                 $login_name = $username;
-                 if(username_exists($login_name)) {
-                     $login_name = $login_name . "_" . $e_user_id;
-                 }
-             
-             $password = wp_generate_password(24, true);
-             $user_data_to_create = array(
-                    'user_login' => $login_name,
-                    'user_pass'  => $password,
-                    'user_email' => $email,
-                    'display_name' => $username,
-             );
-             $user_id = wp_insert_user($user_data_to_create);
-             
-             if(is_wp_error($user_id)) {
-                 wp_die('创建新用户失败'. $user_id -> get_error_message());
-             }
-             
-             $user = get_user_by('id', $user_id);
-             update_user_meta($user_id, 'emoera-openid-user-id', $e_user_id);
-             }
-         }
+        $e_user_id = $user_data['id'];
+        $raw_username = isset($user_data['username']) ? (string)$user_data['username'] : '';
+        $email = isset($user_data['email']) && is_email($user_data['email']) ? sanitize_email($user_data['email']) : '';
+        $login_base = sanitize_user($raw_username, false);
+        if ($login_base === '') {
+            $login_base = 'euser_' . substr(md5($e_user_id . '|' . wp_generate_uuid4()), 0, 8);
+        }
+        if (strlen($login_base) > 60) {
+            $login_base = substr($login_base, 0, 60);
+        }
+        $users = get_users(array(
+            'meta_key'     => 'emoera-openid-user-id',
+            'meta_value'   => $e_user_id,
+            'number'       => 1,
+            'count_total'  => false,
+            'fields'       => 'all',
+        ));
+    
+        if (!empty($users)) {
+            $user = $users[0];
+    
+        } else {
+            if (!empty($email) && email_exists($email)) {
+                $user = get_user_by('email', $email);
+                update_user_meta($user->ID, 'emoera-openid-user-id', $e_user_id);
+            } else {
+                $login_name = $login_base;
+                $counter = 1;
+                while (username_exists($login_name)) {
+                    $suffix = '_' . $counter;
+                    $login_name = substr($login_base, 0, 60 - strlen($suffix)) . $suffix;
+                    $counter++;
+                }
+                $display_name = $raw_username !== '' ? $raw_username : $login_name;
+                $password = wp_generate_password(24, true);
+    
+                $user_data_to_create = array(
+                    'user_login'   => $login_name,
+                    'user_pass'    => $password,
+                    'user_email'   => $email,
+                    'display_name' => $display_name,
+                );
+    
+                $user_id = wp_insert_user($user_data_to_create);
+                if (is_wp_error($user_id)) {
+                    wp_die('创建新用户失败：' . $user_id->get_error_message());
+                }
+                $user = get_user_by('id', $user_id);
+                update_user_meta($user_id, 'emoera-openid-user-id', $e_user_id);
+                update_user_meta($user_id, 'nickname', $display_name);
+            }
+        }
         wp_set_current_user($user->ID, $user->user_login);
         wp_set_auth_cookie($user->ID, true);
         do_action('wp_login', $user->user_login, $user);
-     }
+    }    
  }
 Emoera_Openid_Login::get_instance();
