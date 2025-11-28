@@ -259,61 +259,83 @@
      }
      
      private function login_or_create_user($user_data) {
-        $e_user_id = $user_data['id'];
+        $e_user_id    = isset($user_data['id']) ? (string)$user_data['id'] : '';
         $raw_username = isset($user_data['username']) ? (string)$user_data['username'] : '';
-        $email = isset($user_data['email']) && is_email($user_data['email']) ? sanitize_email($user_data['email']) : '';
-        $login_base = sanitize_user($raw_username, false);
+        $email        = isset($user_data['email']) && is_email($user_data['email'])
+            ? sanitize_email($user_data['email'])
+            : '';
+
+        // 1. 先尝试把第三方用户名转成 WP 允许的 login（严格模式）
+        $login_base = sanitize_user($raw_username, true);
+        $login_base = trim($login_base);
+
+        // 2. 如果转完是空（中文名、特殊字符等），就用一个纯 ASCII 的回退 login
         if ($login_base === '') {
-            $login_base = 'euser_' . substr(md5($e_user_id . '|' . wp_generate_uuid4()), 0, 8);
+            // 用第三方 ID 生成一个稳定的 login，避免下次登录又变一个
+            $login_base = 'euser_' . ( $e_user_id !== '' ? $e_user_id : substr(md5(wp_generate_uuid4()), 0, 8) );
         }
+
+        // 3. 限长（WP user_login 最大 60 字符）
         if (strlen($login_base) > 60) {
             $login_base = substr($login_base, 0, 60);
         }
+
+        // 先根据绑定关系找现有用户
         $users = get_users(array(
-            'meta_key'     => 'emoera-openid-user-id',
-            'meta_value'   => $e_user_id,
-            'number'       => 1,
-            'count_total'  => false,
-            'fields'       => 'all',
+            'meta_key'    => 'emoera-openid-user-id',
+            'meta_value'  => $e_user_id,
+            'number'      => 1,
+            'count_total' => false,
+            'fields'      => 'all',
         ));
-    
+
         if (!empty($users)) {
             $user = $users[0];
-    
+
         } else {
+            // 再根据邮箱尝试绑定
             if (!empty($email) && email_exists($email)) {
                 $user = get_user_by('email', $email);
                 update_user_meta($user->ID, 'emoera-openid-user-id', $e_user_id);
+
             } else {
+                // 4. 确保 login 唯一
                 $login_name = $login_base;
-                $counter = 1;
+                $counter    = 1;
                 while (username_exists($login_name)) {
-                    $suffix = '_' . $counter;
+                    $suffix     = '_' . $counter;
                     $login_name = substr($login_base, 0, 60 - strlen($suffix)) . $suffix;
                     $counter++;
                 }
+
+                // 5. 显示名用原始用户名（可中文），没有就用 login
                 $display_name = $raw_username !== '' ? $raw_username : $login_name;
-                $password = wp_generate_password(24, true);
-    
+                $password     = wp_generate_password(24, true);
+
                 $user_data_to_create = array(
                     'user_login'   => $login_name,
                     'user_pass'    => $password,
                     'user_email'   => $email,
                     'display_name' => $display_name,
                 );
-    
+
                 $user_id = wp_insert_user($user_data_to_create);
                 if (is_wp_error($user_id)) {
                     wp_die('创建新用户失败：' . $user_id->get_error_message());
                 }
+
                 $user = get_user_by('id', $user_id);
+
+                // 绑定 OpenID & 昵称
                 update_user_meta($user_id, 'emoera-openid-user-id', $e_user_id);
                 update_user_meta($user_id, 'nickname', $display_name);
             }
         }
+
+        // 登录
         wp_set_current_user($user->ID, $user->user_login);
         wp_set_auth_cookie($user->ID, true);
         do_action('wp_login', $user->user_login, $user);
-    }    
+    }
  }
 Emoera_Openid_Login::get_instance();
