@@ -9,7 +9,7 @@
 [![WordPress](https://img.shields.io/badge/WordPress-5.5%2B-21759B?logo=wordpress&logoColor=white)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-7.4%2B-777BB4?logo=php&logoColor=white)](https://www.php.net/)
 [![OpenID Connect](https://img.shields.io/badge/OpenID%20Connect-v2.0-0066CC)](#登录流程)
-[![License](https://img.shields.io/badge/License-MPL--2.0-blue)](#许可)
+[![License](https://img.shields.io/badge/License-MPL--2.0-blue)](LICENSE)
 
 </div>
 
@@ -212,6 +212,8 @@ sequenceDiagram
 
 ## 许可
 
-基于 [Mozilla Public License 2.0](https://www.mozilla.org/MPL/2.0/) 发布。
+本项目基于 [Mozilla Public License 2.0](LICENSE)（MPL-2.0）发布，完整许可证文本见仓库根目录的 [LICENSE](LICENSE) 文件。
+
+你可以自由使用、修改和分发本插件；若分发修改后的版本，需以同样的许可证公开对应源文件。
 
 <sub>Powered by Calvin 来自 E时代开发部 · 插件作者 MarkITwin</sub>
